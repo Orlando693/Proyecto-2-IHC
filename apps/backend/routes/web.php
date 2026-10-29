@@ -43,4 +43,7 @@ Route::post('/api/planes', [PlanController::class, 'crear']);
 Route::post('/api/planes/actualizar', [PlanController::class, 'actualizar']);
 Route::post('/api/planes/confirmar', [PlanController::class, 'confirmar']);
 Route::post('/api/planes/cancelar', [PlanController::class, 'cancelar']);
+Route::post('/api/planes/participantes', [PlanController::class, 'agregarParticipante']);
+Route::post('/api/planes/propuestas', [PlanController::class, 'crearPropuesta']);
+Route::post('/api/planes/votos', [PlanController::class, 'votar']);
 Route::get('/api/cambios', [PlanController::class, 'cambios']);

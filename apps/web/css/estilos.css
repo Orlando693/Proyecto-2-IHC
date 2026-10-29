@@ -184,3 +184,14 @@ input:focus, select:focus {
   font-size: 13px;
   margin: 8px 0 0;
 }
+
+.propuesta {
+  border-left: 3px solid #ddd6ea;
+  margin: 8px 0;
+  padding: 6px 0 6px 10px;
+}
+
+.propuesta .boton-linea {
+  min-height: 32px;
+  padding: 4px 12px;
+}

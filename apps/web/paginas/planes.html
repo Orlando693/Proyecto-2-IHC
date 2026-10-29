@@ -163,8 +163,99 @@
         if (!mio) {
           var ajeno = document.createElement("p");
           ajeno.className = "nota";
-          ajeno.textContent = "Solo quien organiza puede cancelar este plan.";
+          ajeno.textContent = "Participas en este plan. Solo quien organiza puede editarlo o cancelarlo.";
           div.appendChild(ajeno);
+        }
+
+        var participantes = document.createElement("p");
+        participantes.className = "nota";
+        var nombres = [];
+        for (var p = 0; p < plan.participantes.length; p++) {
+          nombres.push(plan.participantes[p].nombre);
+        }
+        participantes.textContent = nombres.length ? "Participantes: " + nombres.join(", ") : "Todavía no hay participantes invitados.";
+        div.appendChild(participantes);
+
+        if (mio && plan.estado !== "cancelado") {
+          var etiquetaParticipante = document.createElement("label");
+          etiquetaParticipante.textContent = "Invitar participante";
+          etiquetaParticipante.setAttribute("for", "participante-" + plan.id);
+          div.appendChild(etiquetaParticipante);
+          var correo = document.createElement("input");
+          correo.type = "email";
+          correo.id = "participante-" + plan.id;
+          correo.placeholder = "correo@ejemplo.com";
+          div.appendChild(correo);
+          var invitar = document.createElement("button");
+          invitar.className = "boton-linea";
+          invitar.type = "button";
+          invitar.textContent = "Agregar participante";
+          invitar.style.marginTop = "8px";
+          invitar.setAttribute("data-id", plan.id);
+          invitar.onclick = function () {
+            agregarParticipante(this.getAttribute("data-id"));
+          };
+          div.appendChild(invitar);
+        }
+
+        if (!mio && plan.estado !== "cancelado") {
+          var etiquetaTipo = document.createElement("label");
+          etiquetaTipo.textContent = "Nueva propuesta";
+          etiquetaTipo.setAttribute("for", "tipo-" + plan.id);
+          div.appendChild(etiquetaTipo);
+          var tipo = document.createElement("select");
+          tipo.id = "tipo-" + plan.id;
+          tipo.innerHTML = "<option value=\"fecha\">Fecha</option><option value=\"lugar\">Lugar</option>";
+          div.appendChild(tipo);
+          var propuesta = document.createElement("input");
+          propuesta.id = "propuesta-" + plan.id;
+          propuesta.type = "text";
+          propuesta.placeholder = "Ejemplo: sábado 10 de octubre";
+          div.appendChild(propuesta);
+          var proponer = document.createElement("button");
+          proponer.className = "boton-linea";
+          proponer.type = "button";
+          proponer.textContent = "Agregar propuesta";
+          proponer.style.marginTop = "8px";
+          proponer.setAttribute("data-id", plan.id);
+          proponer.onclick = function () {
+            crearPropuesta(this.getAttribute("data-id"));
+          };
+          div.appendChild(proponer);
+        }
+
+        var tituloPropuestas = document.createElement("p");
+        tituloPropuestas.className = "nota";
+        tituloPropuestas.textContent = "Propuestas y votos";
+        div.appendChild(tituloPropuestas);
+        if (plan.propuestas.length === 0) {
+          var sinPropuestas = document.createElement("p");
+          sinPropuestas.className = "nota";
+          sinPropuestas.textContent = "Todavía no hay propuestas.";
+          div.appendChild(sinPropuestas);
+        }
+        for (var k = 0; k < plan.propuestas.length; k++) {
+          var itemPropuesta = plan.propuestas[k];
+          var propuestaDiv = document.createElement("div");
+          propuestaDiv.className = "propuesta";
+          var detalle = document.createElement("p");
+          var tipoTexto = itemPropuesta.tipo === "fecha" ? "Fecha" : "Lugar";
+          detalle.textContent = tipoTexto + ": " + itemPropuesta.contenido + " · " + itemPropuesta.votos + " voto(s) · Propuesta por " + itemPropuesta.autor;
+          propuestaDiv.appendChild(detalle);
+          if (!mio && plan.estado !== "cancelado") {
+            var votarBoton = document.createElement("button");
+            votarBoton.className = "boton-linea";
+            votarBoton.type = "button";
+            votarBoton.textContent = itemPropuesta.mi_voto ? "Tu voto" : "Votar";
+            votarBoton.disabled = itemPropuesta.mi_voto;
+            votarBoton.setAttribute("data-plan", plan.id);
+            votarBoton.setAttribute("data-propuesta", itemPropuesta.id);
+            votarBoton.onclick = function () {
+              votar(this.getAttribute("data-plan"), this.getAttribute("data-propuesta"));
+            };
+            propuestaDiv.appendChild(votarBoton);
+          }
+          div.appendChild(propuestaDiv);
         }
 
         if (mio && (plan.estado === "borrador" || plan.estado === "confirmado")) {
@@ -349,6 +440,57 @@
       mostrar("err-plan", "");
       fallo = null;
       ultimo = String(id);
+      cargarPlanes();
+    }
+
+    async function agregarParticipante(id) {
+      var correo = document.getElementById("participante-" + id).value.trim();
+      if (!correo) {
+        fallo = String(id);
+        falloTexto = "Escribe el correo del usuario que quieres invitar.";
+        mostrarLista();
+        return;
+      }
+      var res = await pedir("/api/planes/participantes", { id: id, correo: correo });
+      if (!res.ok) {
+        fallo = String(id);
+        falloTexto = res.json.message || "No se pudo agregar el participante.";
+        mostrarLista();
+        return;
+      }
+      fallo = null;
+      cargarPlanes();
+    }
+
+    async function crearPropuesta(id) {
+      var contenido = document.getElementById("propuesta-" + id).value.trim();
+      var tipo = document.getElementById("tipo-" + id).value;
+      if (!contenido) {
+        fallo = String(id);
+        falloTexto = "Escribe una fecha o un lugar para proponer.";
+        mostrarLista();
+        return;
+      }
+      var res = await pedir("/api/planes/propuestas", { id: id, tipo: tipo, contenido: contenido });
+      if (!res.ok) {
+        fallo = String(id);
+        falloTexto = res.json.message || "No se pudo guardar la propuesta.";
+        mostrarLista();
+        return;
+      }
+      fallo = null;
+      cargarPlanes();
+    }
+
+    async function votar(id, propuestaId) {
+      var res = await pedir("/api/planes/votos", { id: id, propuesta_id: propuestaId });
+      if (!res.ok) {
+        fallo = String(id);
+        falloTexto = res.json.message || "No se pudo guardar el voto.";
+        mostrarLista();
+        return;
+      }
+      fallo = null;
       cargarPlanes();
     }
 

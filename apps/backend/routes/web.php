@@ -46,4 +46,6 @@ Route::post('/api/planes/cancelar', [PlanController::class, 'cancelar']);
 Route::post('/api/planes/participantes', [PlanController::class, 'agregarParticipante']);
 Route::post('/api/planes/propuestas', [PlanController::class, 'crearPropuesta']);
 Route::post('/api/planes/votos', [PlanController::class, 'votar']);
+Route::post('/api/planes/votos/quitar', [PlanController::class, 'quitarVoto']);
+Route::post('/api/planes/cerrar-votacion', [PlanController::class, 'cerrarVotacion']);
 Route::get('/api/cambios', [PlanController::class, 'cambios']);

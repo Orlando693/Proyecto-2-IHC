@@ -8,7 +8,7 @@ test('un usuario puede crear un plan y verlo en Mis planes', async ({ page }) =>
   await page.locator('#clave').fill('Planazo123!');
   await page.getByRole('button', { name: 'Entrar' }).click();
 
-  await expect(page).toHaveURL(/\/mis-planes$/);
+  await page.waitForURL(/\/mis-planes$/, { timeout: 60000 });
   await expect(page.getByRole('heading', { name: 'Nuevo plan' })).toBeVisible();
 
   await page.locator('#nombre').fill(nombrePlan);

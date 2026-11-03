@@ -224,6 +224,13 @@
           div.appendChild(proponer);
         }
 
+        if (plan.votacion_cerrada) {
+          var votacionCerrada = document.createElement("p");
+          votacionCerrada.className = "nota";
+          votacionCerrada.textContent = "Votación cerrada. Puedes consultar los resultados.";
+          div.appendChild(votacionCerrada);
+        }
+
         var tituloPropuestas = document.createElement("p");
         tituloPropuestas.className = "nota";
         tituloPropuestas.textContent = "Propuestas y votos";
@@ -242,16 +249,16 @@
           var tipoTexto = itemPropuesta.tipo === "fecha" ? "Fecha" : "Lugar";
           detalle.textContent = tipoTexto + ": " + itemPropuesta.contenido + " · " + itemPropuesta.votos + " voto(s) · Propuesta por " + itemPropuesta.autor;
           propuestaDiv.appendChild(detalle);
-          if (!mio && plan.estado !== "cancelado") {
+          if (!mio && plan.estado !== "cancelado" && !plan.votacion_cerrada) {
             var votarBoton = document.createElement("button");
             votarBoton.className = "boton-linea";
             votarBoton.type = "button";
-            votarBoton.textContent = itemPropuesta.mi_voto ? "Tu voto" : "Votar";
-            votarBoton.disabled = itemPropuesta.mi_voto;
+            votarBoton.textContent = itemPropuesta.mi_voto ? "Quitar voto" : "Votar";
             votarBoton.setAttribute("data-plan", plan.id);
             votarBoton.setAttribute("data-propuesta", itemPropuesta.id);
+            votarBoton.setAttribute("data-votada", itemPropuesta.mi_voto ? "si" : "no");
             votarBoton.onclick = function () {
-              votar(this.getAttribute("data-plan"), this.getAttribute("data-propuesta"));
+              votar(this.getAttribute("data-plan"), this.getAttribute("data-propuesta"), this.getAttribute("data-votada") === "si");
             };
             propuestaDiv.appendChild(votarBoton);
           }
@@ -310,6 +317,18 @@
           };
           div.appendChild(mas);
           div.appendChild(otros);
+
+          if (!plan.votacion_cerrada) {
+            var cerrarVotacionBoton = document.createElement("button");
+            cerrarVotacionBoton.className = "boton-linea";
+            cerrarVotacionBoton.type = "button";
+            cerrarVotacionBoton.textContent = "Cerrar votación";
+            cerrarVotacionBoton.setAttribute("data-id", plan.id);
+            cerrarVotacionBoton.onclick = function () {
+              cerrarVotacion(this.getAttribute("data-id"));
+            };
+            div.appendChild(cerrarVotacionBoton);
+          }
         }
 
         if (mio && plan.estado === "cancelado") {
@@ -482,11 +501,24 @@
       cargarPlanes();
     }
 
-    async function votar(id, propuestaId) {
-      var res = await pedir("/api/planes/votos", { id: id, propuesta_id: propuestaId });
+    async function votar(id, propuestaId, quitar) {
+      var url = quitar ? "/api/planes/votos/quitar" : "/api/planes/votos";
+      var res = await pedir(url, { id: id, propuesta_id: propuestaId });
       if (!res.ok) {
         fallo = String(id);
         falloTexto = res.json.message || "No se pudo guardar el voto.";
+        mostrarLista();
+        return;
+      }
+      fallo = null;
+      cargarPlanes();
+    }
+
+    async function cerrarVotacion(id) {
+      var res = await pedir("/api/planes/cerrar-votacion", { id: id });
+      if (!res.ok) {
+        fallo = String(id);
+        falloTexto = res.json.message || "No se pudo cerrar la votación.";
         mostrarLista();
         return;
       }

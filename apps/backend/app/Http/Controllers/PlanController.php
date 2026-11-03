@@ -29,7 +29,7 @@ class PlanController extends Controller
         ])->where(function ($query) use ($user) {
             $query->where('user_id', $user->id)
                 ->orWhereHas('participantes', fn ($participantes) => $participantes->where('users.id', $user->id));
-        })->orderBy('id')->get(['id', 'user_id', 'nombre', 'fecha_limite', 'estado']);
+        })->orderBy('id')->get(['id', 'user_id', 'nombre', 'fecha_limite', 'estado', 'votacion_cerrada']);
 
         return response()->json(['planes' => $planes->map(function ($plan) {
             return [
@@ -38,6 +38,7 @@ class PlanController extends Controller
                 'nombre' => $plan->nombre,
                 'fecha_limite' => $plan->fecha_limite,
                 'estado' => $plan->estado,
+                'votacion_cerrada' => $plan->votacion_cerrada,
                 'participantes' => $plan->participantes->map(fn ($participante) => [
                     'id' => $participante->id,
                     'nombre' => $participante->name,
@@ -288,6 +289,9 @@ class PlanController extends Controller
         if ($plan->estado === 'cancelado') {
             return response()->json(['message' => 'No se puede votar en un plan cancelado.'], 400);
         }
+        if ($plan->votacion_cerrada) {
+            return response()->json(['message' => 'La votación está cerrada.'], 400);
+        }
 
         $propuesta = Proposal::where('id', $request->input('propuesta_id'))
             ->where('plan_id', $plan->id)
@@ -297,9 +301,53 @@ class PlanController extends Controller
         }
 
         Vote::updateOrCreate(
-            ['plan_id' => $plan->id, 'user_id' => $user->id, 'tipo' => $propuesta->tipo],
-            ['proposal_id' => $propuesta->id]
+            ['plan_id' => $plan->id, 'proposal_id' => $propuesta->id, 'user_id' => $user->id],
+            ['tipo' => $propuesta->tipo]
         );
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function quitarVoto(Request $request)
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return response()->json(['message' => 'No has iniciado sesión'], 401);
+        }
+
+        $plan = $this->planComoParticipante($request->input('id'), $user->id);
+        if (! $plan) {
+            return response()->json(['message' => 'Solo los participantes pueden votar.'], 403);
+        }
+        if ($plan->estado === 'cancelado' || $plan->votacion_cerrada) {
+            return response()->json(['message' => 'La votación no se puede modificar.'], 400);
+        }
+
+        Vote::where('plan_id', $plan->id)
+            ->where('proposal_id', $request->input('propuesta_id'))
+            ->where('user_id', $user->id)
+            ->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function cerrarVotacion(Request $request)
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return response()->json(['message' => 'No has iniciado sesión'], 401);
+        }
+
+        $plan = Plan::where('id', $request->input('id'))->where('user_id', $user->id)->first();
+        if (! $plan) {
+            return response()->json(['message' => 'Solo quien organiza puede cerrar la votación.'], 403);
+        }
+        if ($plan->estado === 'cancelado' || $plan->votacion_cerrada) {
+            return response()->json(['message' => 'La votación ya está cerrada.'], 400);
+        }
+
+        $plan->votacion_cerrada = true;
+        $plan->save();
 
         return response()->json(['ok' => true]);
     }

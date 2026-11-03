@@ -1,0 +1,62 @@
+# Planazo (https://github.com/DSaav22/Proyecto-2-IHC)
+# Coloca este archivo en la raiz del repositorio y ejecuta:
+#   docker compose up --build
+
+services:
+  planazo:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM php:8.4-cli
+
+        RUN apt-get update \
+            && apt-get install -y --no-install-recommends \
+                git unzip libicu-dev libzip-dev \
+            && docker-php-ext-install bcmath intl zip \
+            && rm -rf /var/lib/apt/lists/*
+
+        COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+        WORKDIR /workspace/apps/backend
+
+    working_dir: /workspace/apps/backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/workspace
+      # Instalar vendor en un volumen Linux evita la extraccion lenta en Windows.
+      - planazo_vendor:/workspace/apps/backend/vendor
+      - composer_cache:/tmp/composer-cache
+    environment:
+      COMPOSER_ALLOW_SUPERUSER: "1"
+      COMPOSER_PROCESS_TIMEOUT: "1800"
+      COMPOSER_CACHE_DIR: /tmp/composer-cache
+    command:
+      - sh
+      - -ec
+      - |
+        if [ ! -f .env ]; then
+          cp .env.example .env
+        fi
+
+        if [ ! -f database/database.sqlite ]; then
+          touch database/database.sqlite
+        fi
+
+        composer install --no-interaction --prefer-dist --no-progress
+
+        if ! grep -q '^APP_KEY=base64:' .env; then
+          php artisan key:generate --force
+        fi
+
+        if [ ! -s database/database.sqlite ]; then
+          php artisan migrate --seed --force
+        else
+          php artisan migrate --force
+        fi
+
+        cd public
+        exec php -S 0.0.0.0:8000 -t . ../servidor.php
+
+volumes:
+  planazo_vendor:
+  composer_cache:

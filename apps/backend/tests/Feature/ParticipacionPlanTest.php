@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Plan;
 use App\Models\Proposal;
 use App\Models\User;
+use App\Models\Vote;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -12,7 +13,7 @@ class ParticipacionPlanTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_un_participante_puede_proponer_y_cambiar_su_voto(): void
+    public function test_un_participante_puede_votar_varias_propuestas_y_el_organizador_cierra_la_votacion(): void
     {
         $organizador = User::create([
             'name' => 'Organizador',
@@ -66,7 +67,13 @@ class ParticipacionPlanTest extends TestCase
             'propuesta_id' => $segunda->id,
         ])->assertOk();
 
-        $this->assertDatabaseCount('votes', 1);
+        $this->assertDatabaseCount('votes', 2);
+        $this->assertDatabaseHas('votes', [
+            'plan_id' => $plan->id,
+            'proposal_id' => $primera->id,
+            'user_id' => $participante->id,
+            'tipo' => 'fecha',
+        ]);
         $this->assertDatabaseHas('votes', [
             'plan_id' => $plan->id,
             'proposal_id' => $segunda->id,
@@ -76,8 +83,27 @@ class ParticipacionPlanTest extends TestCase
 
         $respuesta = $this->getJson('/api/planes')->assertOk();
         $propuestas = $respuesta->json('planes.0.propuestas');
-        $this->assertSame(0, $propuestas[0]['votos']);
+        $this->assertSame(1, $propuestas[0]['votos']);
         $this->assertSame(1, $propuestas[1]['votos']);
+        $this->assertTrue($propuestas[0]['mi_voto']);
         $this->assertTrue($propuestas[1]['mi_voto']);
+
+        $this->postJson('/api/planes/votos/quitar', [
+            'id' => $plan->id,
+            'propuesta_id' => $primera->id,
+        ])->assertOk();
+        $this->assertDatabaseCount('votes', 1);
+
+        $this->actingAs($organizador)
+            ->postJson('/api/planes/cerrar-votacion', ['id' => $plan->id])
+            ->assertOk();
+
+        $this->actingAs($participante)
+            ->postJson('/api/planes/votos', [
+                'id' => $plan->id,
+                'propuesta_id' => $primera->id,
+            ])->assertStatus(400);
+
+        $this->assertSame(1, Vote::count());
     }
 }

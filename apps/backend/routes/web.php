@@ -5,22 +5,24 @@ use App\Http\Controllers\PlanController;
 use Illuminate\Support\Facades\Route;
 
 // apps/web esta un nivel arriba: paginas, css y js
-function archivoWeb(string $nombre)
-{
-    $partes = str_replace('/', DIRECTORY_SEPARATOR, $nombre);
-    $ruta = dirname(base_path()).DIRECTORY_SEPARATOR.'web'.DIRECTORY_SEPARATOR.$partes;
-    abort_unless(is_file($ruta), 404);
+if (! function_exists('archivoWeb')) {
+    function archivoWeb(string $nombre)
+    {
+        $partes = str_replace('/', DIRECTORY_SEPARATOR, $nombre);
+        $ruta = dirname(base_path()).DIRECTORY_SEPARATOR.'web'.DIRECTORY_SEPARATOR.$partes;
+        abort_unless(is_file($ruta), 404);
 
-    $tipos = [
-        'html' => 'text/html; charset=utf-8',
-        'css' => 'text/css; charset=utf-8',
-        'js' => 'text/javascript; charset=utf-8',
-    ];
-    $ext = pathinfo($ruta, PATHINFO_EXTENSION);
+        $tipos = [
+            'html' => 'text/html; charset=utf-8',
+            'css' => 'text/css; charset=utf-8',
+            'js' => 'text/javascript; charset=utf-8',
+        ];
+        $ext = pathinfo($ruta, PATHINFO_EXTENSION);
 
-    return response()->file($ruta, [
-        'Content-Type' => $tipos[$ext] ?? 'text/plain; charset=utf-8',
-    ]);
+        return response()->file($ruta, [
+            'Content-Type' => $tipos[$ext] ?? 'text/plain; charset=utf-8',
+        ]);
+    }
 }
 
 Route::get('/', fn () => archivoWeb('paginas/index.html'));
@@ -48,4 +50,5 @@ Route::post('/api/planes/propuestas', [PlanController::class, 'crearPropuesta'])
 Route::post('/api/planes/votos', [PlanController::class, 'votar']);
 Route::post('/api/planes/votos/quitar', [PlanController::class, 'quitarVoto']);
 Route::post('/api/planes/cerrar-votacion', [PlanController::class, 'cerrarVotacion']);
+Route::post('/api/planes/confirmar-resultado', [PlanController::class, 'confirmarResultado']);
 Route::get('/api/cambios', [PlanController::class, 'cambios']);

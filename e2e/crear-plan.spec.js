@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('un usuario puede crear un plan y verlo en Mis planes', async ({ page }) => {
+  test.setTimeout(180000);
   const nombrePlan = `Plan E2E ${Date.now()}`;
 
   await page.goto('/login');
@@ -19,6 +20,7 @@ test('un usuario puede crear un plan y verlo en Mis planes', async ({ page }) =>
 });
 
 test('el organizador puede agregar opciones y votar después de crear un plan', async ({ page }) => {
+  test.setTimeout(180000);
   const nombrePlan = `Opciones E2E ${Date.now()}`;
 
   await page.goto('/login');

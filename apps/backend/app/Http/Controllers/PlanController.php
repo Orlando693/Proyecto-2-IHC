@@ -257,8 +257,8 @@ class PlanController extends Controller
         if (! $plan) {
             return response()->json(['message' => 'Solo quien organiza o participa puede proponer opciones.'], 403);
         }
-        if ($plan->estado === 'cancelado') {
-            return response()->json(['message' => 'No se pueden proponer opciones en un plan cancelado.'], 400);
+        if ($plan->estado === 'cancelado' || $plan->votacion_cerrada) {
+            return response()->json(['message' => 'No se pueden proponer opciones cuando la votación está cerrada.'], 400);
         }
 
         $tipo = $request->input('tipo');

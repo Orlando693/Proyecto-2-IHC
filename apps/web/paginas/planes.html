@@ -198,7 +198,7 @@
           div.appendChild(invitar);
         }
 
-        if (plan.estado !== "cancelado") {
+        if (plan.estado !== "cancelado" && !plan.votacion_cerrada) {
           var etiquetaTipo = document.createElement("label");
           etiquetaTipo.textContent = "Tipo de opción";
           etiquetaTipo.setAttribute("for", "tipo-" + plan.id);

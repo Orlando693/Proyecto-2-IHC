@@ -192,6 +192,13 @@ class ParticipacionPlanTest extends TestCase
             ->assertJsonPath('planes.0.propuesta_ganadora_id', $sabado->id);
         $this->postJson('/api/planes/votos', ['id' => $plan->id, 'propuesta_id' => $domingo->id])
             ->assertStatus(400);
+        $this->postJson('/api/planes/propuestas', [
+            'id' => $plan->id,
+            'tipo' => 'fecha',
+            'contenido' => 'Viernes',
+        ])->assertStatus(400);
+        $this->postJson('/api/planes/votos/quitar', ['id' => $plan->id, 'propuesta_id' => $domingo->id])
+            ->assertStatus(400);
     }
 
     public function test_el_organizador_resuelve_un_empate_con_motivo(): void
@@ -201,21 +208,36 @@ class ParticipacionPlanTest extends TestCase
             'email' => 'organizador@planazo.com',
             'password' => 'Planazo123!',
         ]);
+        $participante = User::create([
+            'name' => 'Participante',
+            'email' => 'participante@planazo.com',
+            'password' => 'Planazo123!',
+        ]);
         $plan = Plan::create([
             'user_id' => $organizador->id,
             'nombre' => 'Salida',
             'fecha_limite' => 'viernes',
             'estado' => 'borrador',
-            'votacion_cerrada' => true,
         ]);
+        $plan->participantes()->attach($participante->id);
         $parque = Proposal::create(['plan_id' => $plan->id, 'user_id' => $organizador->id, 'tipo' => 'lugar', 'contenido' => 'Parque']);
         $cine = Proposal::create(['plan_id' => $plan->id, 'user_id' => $organizador->id, 'tipo' => 'lugar', 'contenido' => 'Cine']);
+        Vote::create(['plan_id' => $plan->id, 'proposal_id' => $parque->id, 'user_id' => $organizador->id, 'tipo' => 'lugar']);
+        Vote::create(['plan_id' => $plan->id, 'proposal_id' => $cine->id, 'user_id' => $organizador->id, 'tipo' => 'lugar']);
+
+        $this->actingAs($participante)
+            ->postJson('/api/planes/cerrar-votacion', ['id' => $plan->id])
+            ->assertStatus(403);
+        $this->postJson('/api/planes/confirmar-resultado', ['id' => $plan->id])
+            ->assertStatus(403);
 
         $this->actingAs($organizador)
-            ->postJson('/api/planes/confirmar-resultado', [
-                'id' => $plan->id,
-                'propuesta_id' => $parque->id,
-            ])->assertStatus(400);
+            ->postJson('/api/planes/cerrar-votacion', ['id' => $plan->id])
+            ->assertOk();
+        $this->postJson('/api/planes/confirmar-resultado', [
+            'id' => $plan->id,
+            'propuesta_id' => $parque->id,
+        ])->assertStatus(400);
         $this->postJson('/api/planes/confirmar-resultado', [
             'id' => $plan->id,
             'propuesta_id' => $cine->id,
@@ -227,5 +249,11 @@ class ParticipacionPlanTest extends TestCase
             'propuesta_ganadora_id' => $cine->id,
             'motivo_decision' => 'Es más fácil llegar en transporte público.',
         ]);
+
+        $this->actingAs($participante)
+            ->getJson('/api/planes')
+            ->assertOk()
+            ->assertJsonPath('planes.0.propuesta_ganadora_id', $cine->id)
+            ->assertJsonPath('planes.0.motivo_decision', 'Es más fácil llegar en transporte público.');
     }
 }

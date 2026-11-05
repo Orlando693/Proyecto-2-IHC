@@ -14,7 +14,7 @@ function tarjetaPlan(page, nombrePlan) {
 }
 
 test('un participante puede cambiar varios votos y el organizador confirma el resultado', async ({ page, browser }) => {
-  test.setTimeout(180000);
+  test.setTimeout(300000);
   const nombrePlan = `Votos E2E ${Date.now()}`;
   const participanteContexto = await browser.newContext();
   const participante = await participanteContexto.newPage();

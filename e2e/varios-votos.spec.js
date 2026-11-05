@@ -13,7 +13,7 @@ function tarjetaPlan(page, nombrePlan) {
   return page.locator('#lista > .plan').filter({ hasText: nombrePlan });
 }
 
-test('un participante puede cambiar varios votos y el organizador cierra la votación', async ({ page, browser }) => {
+test('un participante puede cambiar varios votos y el organizador confirma el resultado', async ({ page, browser }) => {
   test.setTimeout(180000);
   const nombrePlan = `Votos E2E ${Date.now()}`;
   const participanteContexto = await browser.newContext();
@@ -36,9 +36,9 @@ test('un participante puede cambiar varios votos y el organizador cierra la vota
     await expect(planParticipante).toBeVisible();
 
     for (const propuesta of ['Sábado', 'Domingo']) {
-      await planParticipante.getByLabel('Nueva propuesta').selectOption('fecha');
+      await planParticipante.getByLabel('Tipo de opción').selectOption('fecha');
       await planParticipante.locator('input[placeholder="Ejemplo: sábado 10 de octubre"]').fill(propuesta);
-      await planParticipante.getByRole('button', { name: 'Agregar propuesta' }).click();
+      await planParticipante.getByRole('button', { name: 'Agregar opción' }).click();
       await expect(planParticipante).toContainText(`Fecha: ${propuesta}`);
     }
 
@@ -67,11 +67,15 @@ test('un participante puede cambiar varios votos y el organizador cierra la vota
     await page.reload();
     await tarjetaPlan(page, nombrePlan).getByRole('button', { name: 'Cerrar votación' }).click();
     await expect(tarjetaPlan(page, nombrePlan)).toContainText('Votación cerrada. Puedes consultar los resultados.');
+    await expect(tarjetaPlan(page, nombrePlan)).toContainText('Opción con más votos: Sábado');
+    await tarjetaPlan(page, nombrePlan).getByRole('button', { name: 'Confirmar resultado' }).click();
+    await expect(tarjetaPlan(page, nombrePlan)).toContainText('Resultado confirmado: Fecha: Sábado');
 
     await participante.reload();
     const planCerrado = tarjetaPlan(participante, nombrePlan);
     await expect(planCerrado).toContainText('Votación cerrada. Puedes consultar los resultados.');
     await expect(planCerrado).toContainText('Fecha: Sábado · 1 voto(s)');
+    await expect(planCerrado).toContainText('Resultado confirmado: Fecha: Sábado');
     await expect(planCerrado.getByRole('button', { name: /Votar|Quitar voto/ })).toHaveCount(0);
 
     const resultado = await participante.evaluate(async ({ id, propuestaId }) => {

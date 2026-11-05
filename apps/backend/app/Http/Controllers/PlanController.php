@@ -29,7 +29,7 @@ class PlanController extends Controller
         ])->where(function ($query) use ($user) {
             $query->where('user_id', $user->id)
                 ->orWhereHas('participantes', fn ($participantes) => $participantes->where('users.id', $user->id));
-        })->orderBy('id')->get(['id', 'user_id', 'nombre', 'fecha_limite', 'estado', 'votacion_cerrada']);
+        })->orderBy('id')->get(['id', 'user_id', 'nombre', 'fecha_limite', 'estado', 'votacion_cerrada', 'propuesta_ganadora_id', 'motivo_decision']);
 
         return response()->json(['planes' => $planes->map(function ($plan) {
             return [
@@ -39,6 +39,8 @@ class PlanController extends Controller
                 'fecha_limite' => $plan->fecha_limite,
                 'estado' => $plan->estado,
                 'votacion_cerrada' => $plan->votacion_cerrada,
+                'propuesta_ganadora_id' => $plan->propuesta_ganadora_id,
+                'motivo_decision' => $plan->motivo_decision,
                 'participantes' => $plan->participantes->map(fn ($participante) => [
                     'id' => $participante->id,
                     'nombre' => $participante->name,
@@ -253,7 +255,7 @@ class PlanController extends Controller
 
         $plan = $this->planComoParticipante($request->input('id'), $user->id);
         if (! $plan) {
-            return response()->json(['message' => 'Solo los participantes pueden proponer opciones.'], 403);
+            return response()->json(['message' => 'Solo quien organiza o participa puede proponer opciones.'], 403);
         }
         if ($plan->estado === 'cancelado') {
             return response()->json(['message' => 'No se pueden proponer opciones en un plan cancelado.'], 400);
@@ -284,7 +286,7 @@ class PlanController extends Controller
 
         $plan = $this->planComoParticipante($request->input('id'), $user->id);
         if (! $plan) {
-            return response()->json(['message' => 'Solo los participantes pueden votar.'], 403);
+            return response()->json(['message' => 'Solo quien organiza o participa puede votar.'], 403);
         }
         if ($plan->estado === 'cancelado') {
             return response()->json(['message' => 'No se puede votar en un plan cancelado.'], 400);
@@ -317,7 +319,7 @@ class PlanController extends Controller
 
         $plan = $this->planComoParticipante($request->input('id'), $user->id);
         if (! $plan) {
-            return response()->json(['message' => 'Solo los participantes pueden votar.'], 403);
+            return response()->json(['message' => 'Solo quien organiza o participa puede votar.'], 403);
         }
         if ($plan->estado === 'cancelado' || $plan->votacion_cerrada) {
             return response()->json(['message' => 'La votación no se puede modificar.'], 400);
@@ -352,10 +354,56 @@ class PlanController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function confirmarResultado(Request $request)
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return response()->json(['message' => 'No has iniciado sesión'], 401);
+        }
+
+        $plan = Plan::where('id', $request->input('id'))->where('user_id', $user->id)->first();
+        if (! $plan) {
+            return response()->json(['message' => 'Solo quien organiza puede confirmar el resultado.'], 403);
+        }
+        if (! $plan->votacion_cerrada || $plan->estado === 'cancelado') {
+            return response()->json(['message' => 'Primero debes cerrar una votación activa.'], 400);
+        }
+        if ($plan->propuesta_ganadora_id) {
+            return response()->json(['message' => 'El resultado ya fue confirmado.'], 400);
+        }
+
+        $propuestas = Proposal::where('plan_id', $plan->id)->withCount('votes')->get();
+        if ($propuestas->isEmpty()) {
+            return response()->json(['message' => 'No hay opciones para confirmar.'], 400);
+        }
+
+        $maximo = $propuestas->max('votes_count');
+        $empatadas = $propuestas->where('votes_count', $maximo);
+        $ganadora = $empatadas->first();
+        $motivo = trim($request->input('motivo', ''));
+
+        if ($empatadas->count() > 1) {
+            $ganadora = $empatadas->firstWhere('id', (int) $request->input('propuesta_id'));
+            if (! $ganadora || $motivo === '') {
+                return response()->json(['message' => 'Elige una opción empatada y escribe el motivo.'], 400);
+            }
+        }
+
+        $plan->propuesta_ganadora_id = $ganadora->id;
+        $plan->motivo_decision = $empatadas->count() > 1 ? $motivo : null;
+        $plan->estado = 'confirmado';
+        $plan->save();
+
+        return response()->json(['ok' => true]);
+    }
+
     private function planComoParticipante($planId, $userId): ?Plan
     {
         return Plan::where('id', $planId)
-            ->whereHas('participantes', fn ($participantes) => $participantes->where('users.id', $userId))
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                    ->orWhereHas('participantes', fn ($participantes) => $participantes->where('users.id', $userId));
+            })
             ->first();
     }
 }

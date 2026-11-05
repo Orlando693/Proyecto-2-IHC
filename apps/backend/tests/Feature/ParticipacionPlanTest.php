@@ -106,4 +106,126 @@ class ParticipacionPlanTest extends TestCase
 
         $this->assertSame(1, Vote::count());
     }
+
+    public function test_el_organizador_puede_agregar_y_votar_opciones(): void
+    {
+        $organizador = User::create([
+            'name' => 'Organizador',
+            'email' => 'organizador@planazo.com',
+            'password' => 'Planazo123!',
+        ]);
+        $plan = Plan::create([
+            'user_id' => $organizador->id,
+            'nombre' => 'Salida',
+            'fecha_limite' => 'viernes',
+            'estado' => 'borrador',
+        ]);
+
+        $this->actingAs($organizador)
+            ->postJson('/api/planes/propuestas', [
+                'id' => $plan->id,
+                'tipo' => 'fecha',
+                'contenido' => 'Sábado',
+            ])->assertCreated();
+        $this->postJson('/api/planes/propuestas', [
+            'id' => $plan->id,
+            'tipo' => 'lugar',
+            'contenido' => 'Parque',
+        ])->assertCreated();
+
+        $propuestas = Proposal::where('plan_id', $plan->id)->get();
+        $this->assertCount(2, $propuestas);
+
+        foreach ($propuestas as $propuesta) {
+            $this->postJson('/api/planes/votos', [
+                'id' => $plan->id,
+                'propuesta_id' => $propuesta->id,
+            ])->assertOk();
+        }
+
+        $respuesta = $this->getJson('/api/planes')->assertOk();
+        $this->assertCount(2, $respuesta->json('planes.0.propuestas'));
+        $this->assertSame(2, Vote::count());
+    }
+
+    public function test_el_organizador_confirma_la_opcion_con_mas_votos(): void
+    {
+        $organizador = User::create([
+            'name' => 'Organizador',
+            'email' => 'organizador@planazo.com',
+            'password' => 'Planazo123!',
+        ]);
+        $participante = User::create([
+            'name' => 'Participante',
+            'email' => 'participante@planazo.com',
+            'password' => 'Planazo123!',
+        ]);
+        $plan = Plan::create([
+            'user_id' => $organizador->id,
+            'nombre' => 'Cena',
+            'fecha_limite' => 'viernes',
+            'estado' => 'borrador',
+        ]);
+        $plan->participantes()->attach($participante->id);
+        $sabado = Proposal::create(['plan_id' => $plan->id, 'user_id' => $organizador->id, 'tipo' => 'fecha', 'contenido' => 'Sábado']);
+        $domingo = Proposal::create(['plan_id' => $plan->id, 'user_id' => $organizador->id, 'tipo' => 'fecha', 'contenido' => 'Domingo']);
+        Vote::create(['plan_id' => $plan->id, 'proposal_id' => $sabado->id, 'user_id' => $organizador->id, 'tipo' => 'fecha']);
+        Vote::create(['plan_id' => $plan->id, 'proposal_id' => $sabado->id, 'user_id' => $participante->id, 'tipo' => 'fecha']);
+        Vote::create(['plan_id' => $plan->id, 'proposal_id' => $domingo->id, 'user_id' => $participante->id, 'tipo' => 'fecha']);
+
+        $this->actingAs($organizador)
+            ->postJson('/api/planes/cerrar-votacion', ['id' => $plan->id])
+            ->assertOk();
+        $this->postJson('/api/planes/confirmar-resultado', ['id' => $plan->id])
+            ->assertOk();
+
+        $this->assertDatabaseHas('plans', [
+            'id' => $plan->id,
+            'propuesta_ganadora_id' => $sabado->id,
+            'estado' => 'confirmado',
+            'votacion_cerrada' => true,
+        ]);
+
+        $this->actingAs($participante)
+            ->getJson('/api/planes')
+            ->assertOk()
+            ->assertJsonPath('planes.0.propuesta_ganadora_id', $sabado->id);
+        $this->postJson('/api/planes/votos', ['id' => $plan->id, 'propuesta_id' => $domingo->id])
+            ->assertStatus(400);
+    }
+
+    public function test_el_organizador_resuelve_un_empate_con_motivo(): void
+    {
+        $organizador = User::create([
+            'name' => 'Organizador',
+            'email' => 'organizador@planazo.com',
+            'password' => 'Planazo123!',
+        ]);
+        $plan = Plan::create([
+            'user_id' => $organizador->id,
+            'nombre' => 'Salida',
+            'fecha_limite' => 'viernes',
+            'estado' => 'borrador',
+            'votacion_cerrada' => true,
+        ]);
+        $parque = Proposal::create(['plan_id' => $plan->id, 'user_id' => $organizador->id, 'tipo' => 'lugar', 'contenido' => 'Parque']);
+        $cine = Proposal::create(['plan_id' => $plan->id, 'user_id' => $organizador->id, 'tipo' => 'lugar', 'contenido' => 'Cine']);
+
+        $this->actingAs($organizador)
+            ->postJson('/api/planes/confirmar-resultado', [
+                'id' => $plan->id,
+                'propuesta_id' => $parque->id,
+            ])->assertStatus(400);
+        $this->postJson('/api/planes/confirmar-resultado', [
+            'id' => $plan->id,
+            'propuesta_id' => $cine->id,
+            'motivo' => 'Es más fácil llegar en transporte público.',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('plans', [
+            'id' => $plan->id,
+            'propuesta_ganadora_id' => $cine->id,
+            'motivo_decision' => 'Es más fácil llegar en transporte público.',
+        ]);
+    }
 }

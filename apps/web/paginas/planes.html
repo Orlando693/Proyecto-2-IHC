@@ -265,6 +265,85 @@
           div.appendChild(propuestaDiv);
         }
 
+        var propuestaGanadora = null;
+        for (var g = 0; g < plan.propuestas.length; g++) {
+          if (String(plan.propuestas[g].id) === String(plan.propuesta_ganadora_id)) {
+            propuestaGanadora = plan.propuestas[g];
+          }
+        }
+
+        if (propuestaGanadora) {
+          var resultado = document.createElement("p");
+          resultado.className = "ok";
+          var tipoGanador = propuestaGanadora.tipo === "fecha" ? "Fecha" : "Lugar";
+          resultado.textContent = "Resultado confirmado: " + tipoGanador + ": " + propuestaGanadora.contenido;
+          div.appendChild(resultado);
+          if (plan.motivo_decision) {
+            var motivoResultado = document.createElement("p");
+            motivoResultado.className = "nota";
+            motivoResultado.textContent = "Motivo de la decisión: " + plan.motivo_decision;
+            div.appendChild(motivoResultado);
+          }
+        } else if (mio && plan.votacion_cerrada && plan.estado !== "cancelado") {
+          var maximo = -1;
+          var empatadas = [];
+          for (var m = 0; m < plan.propuestas.length; m++) {
+            if (plan.propuestas[m].votos > maximo) {
+              maximo = plan.propuestas[m].votos;
+              empatadas = [plan.propuestas[m]];
+            } else if (plan.propuestas[m].votos === maximo) {
+              empatadas.push(plan.propuestas[m]);
+            }
+          }
+
+          if (empatadas.length === 1) {
+            var masVotada = document.createElement("p");
+            masVotada.className = "nota";
+            masVotada.textContent = "Opción con más votos: " + empatadas[0].contenido;
+            div.appendChild(masVotada);
+          }
+          if (empatadas.length > 1) {
+            var avisoEmpate = document.createElement("p");
+            avisoEmpate.className = "nota";
+            avisoEmpate.textContent = "Hay empate. Elige una opción ganadora y explica tu decisión.";
+            div.appendChild(avisoEmpate);
+            var etiquetaGanadora = document.createElement("label");
+            etiquetaGanadora.textContent = "Opción ganadora";
+            etiquetaGanadora.setAttribute("for", "ganadora-" + plan.id);
+            div.appendChild(etiquetaGanadora);
+            var selectorGanadora = document.createElement("select");
+            selectorGanadora.id = "ganadora-" + plan.id;
+            for (var e = 0; e < empatadas.length; e++) {
+              var opcionGanadora = document.createElement("option");
+              opcionGanadora.value = empatadas[e].id;
+              opcionGanadora.textContent = empatadas[e].contenido;
+              selectorGanadora.appendChild(opcionGanadora);
+            }
+            div.appendChild(selectorGanadora);
+            var etiquetaMotivo = document.createElement("label");
+            etiquetaMotivo.textContent = "Motivo de la decisión";
+            etiquetaMotivo.setAttribute("for", "motivo-" + plan.id);
+            div.appendChild(etiquetaMotivo);
+            var motivo = document.createElement("input");
+            motivo.id = "motivo-" + plan.id;
+            motivo.type = "text";
+            motivo.placeholder = "Ejemplo: ambas fechas sirven, elegí la más cercana";
+            div.appendChild(motivo);
+          }
+          if (empatadas.length > 0) {
+            var confirmarResultadoBoton = document.createElement("button");
+            confirmarResultadoBoton.className = "boton-linea";
+            confirmarResultadoBoton.type = "button";
+            confirmarResultadoBoton.textContent = "Confirmar resultado";
+            confirmarResultadoBoton.style.marginTop = "8px";
+            confirmarResultadoBoton.setAttribute("data-id", plan.id);
+            confirmarResultadoBoton.onclick = function () {
+              confirmarResultado(this.getAttribute("data-id"));
+            };
+            div.appendChild(confirmarResultadoBoton);
+          }
+        }
+
         if (mio && (plan.estado === "borrador" || plan.estado === "confirmado")) {
           var botonCancelar = document.createElement("button");
           botonCancelar.className = "boton";
@@ -519,6 +598,23 @@
       if (!res.ok) {
         fallo = String(id);
         falloTexto = res.json.message || "No se pudo cerrar la votación.";
+        mostrarLista();
+        return;
+      }
+      fallo = null;
+      cargarPlanes();
+    }
+
+    async function confirmarResultado(id) {
+      var ganadora = document.getElementById("ganadora-" + id);
+      var motivo = document.getElementById("motivo-" + id);
+      var datos = { id: id };
+      if (ganadora) datos.propuesta_id = ganadora.value;
+      if (motivo) datos.motivo = motivo.value.trim();
+      var res = await pedir("/api/planes/confirmar-resultado", datos);
+      if (!res.ok) {
+        fallo = String(id);
+        falloTexto = res.json.message || "No se pudo confirmar el resultado.";
         mostrarLista();
         return;
       }

@@ -198,9 +198,9 @@
           div.appendChild(invitar);
         }
 
-        if (!mio && plan.estado !== "cancelado") {
+        if (plan.estado !== "cancelado") {
           var etiquetaTipo = document.createElement("label");
-          etiquetaTipo.textContent = "Nueva propuesta";
+          etiquetaTipo.textContent = "Tipo de opción";
           etiquetaTipo.setAttribute("for", "tipo-" + plan.id);
           div.appendChild(etiquetaTipo);
           var tipo = document.createElement("select");
@@ -215,7 +215,7 @@
           var proponer = document.createElement("button");
           proponer.className = "boton-linea";
           proponer.type = "button";
-          proponer.textContent = "Agregar propuesta";
+          proponer.textContent = "Agregar opción";
           proponer.style.marginTop = "8px";
           proponer.setAttribute("data-id", plan.id);
           proponer.onclick = function () {
@@ -233,7 +233,7 @@
 
         var tituloPropuestas = document.createElement("p");
         tituloPropuestas.className = "nota";
-        tituloPropuestas.textContent = "Propuestas y votos";
+        tituloPropuestas.textContent = "Opciones y votación";
         div.appendChild(tituloPropuestas);
         if (plan.propuestas.length === 0) {
           var sinPropuestas = document.createElement("p");
@@ -249,7 +249,7 @@
           var tipoTexto = itemPropuesta.tipo === "fecha" ? "Fecha" : "Lugar";
           detalle.textContent = tipoTexto + ": " + itemPropuesta.contenido + " · " + itemPropuesta.votos + " voto(s) · Propuesta por " + itemPropuesta.autor;
           propuestaDiv.appendChild(detalle);
-          if (!mio && plan.estado !== "cancelado" && !plan.votacion_cerrada) {
+          if (plan.estado !== "cancelado" && !plan.votacion_cerrada) {
             var votarBoton = document.createElement("button");
             votarBoton.className = "boton-linea";
             votarBoton.type = "button";
